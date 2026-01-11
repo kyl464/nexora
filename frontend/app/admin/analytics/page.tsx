@@ -31,21 +31,29 @@ export default function AdminAnalyticsPage() {
         const fetchData = async () => {
             try {
                 // Fetch data from various endpoints
-                const [products, orders] = await Promise.all([
+                const [products, orders, users] = await Promise.all([
                     api.getProducts({ limit: 1 }),
-                    api.adminGetAllOrders(1)
+                    api.adminGetAllOrders(1),
+                    api.adminGetAllUsers()
                 ]);
 
-                // Calculate totals
-                const totalRevenue = orders.orders?.reduce((sum, o) => sum + o.total, 0) || 0;
+                // Calculate totals - count paid/processing/shipped/delivered orders for revenue
+                const successfulOrders = orders.orders?.filter(o =>
+                    ['paid', 'processing', 'shipped', 'delivered'].includes(o.status)
+                ) || [];
+                const totalRevenue = successfulOrders.reduce((sum, o) => sum + o.total, 0);
+
+                // Calculate change percentages (mock for now - would need historical data)
+                const revenueChange = successfulOrders.length > 0 ? 12.5 : 0;
+                const ordersChange = orders.total > 0 ? 8.2 : 0;
 
                 setData({
                     totalRevenue,
                     totalOrders: orders.total || 0,
                     totalProducts: products.total || 0,
-                    totalUsers: 0, // Would need API call
-                    revenueChange: 12.5, // Mock data
-                    ordersChange: 8.2, // Mock data
+                    totalUsers: users?.length || 0,
+                    revenueChange,
+                    ordersChange,
                 });
             } catch (error) {
                 console.error('Failed to fetch analytics:', error);

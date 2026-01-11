@@ -77,6 +77,8 @@ class ApiClient {
         if (params?.limit) searchParams.set('limit', params.limit.toString());
         if (params?.sort) searchParams.set('sort', params.sort);
         if (params?.order) searchParams.set('order', params.order);
+        if (params?.minPrice) searchParams.set('min_price', params.minPrice.toString());
+        if (params?.maxPrice) searchParams.set('max_price', params.maxPrice.toString());
 
         const query = searchParams.toString();
         return this.request<ProductsResponse>(`/products${query ? `?${query}` : ''}`);
@@ -249,10 +251,14 @@ class ApiClient {
         return this.request<OrdersResponse>(`/admin/orders${query}`);
     }
 
-    async adminUpdateOrderStatus(orderId: string, status: string) {
+    async adminGetOrderDetail(orderId: string) {
+        return this.request<Order>(`/admin/orders/${orderId}`);
+    }
+
+    async adminUpdateOrderStatus(orderId: string, status: string, trackingNumber?: string) {
         return this.request<Order>(`/admin/orders/${orderId}/status`, {
             method: 'PUT',
-            body: JSON.stringify({ status }),
+            body: JSON.stringify({ status, tracking_number: trackingNumber }),
         });
     }
 
@@ -285,6 +291,34 @@ class ApiClient {
     async adminDeleteCategory(id: string) {
         return this.request<{ message: string }>(`/admin/categories/${id}`, {
             method: 'DELETE',
+        });
+    }
+
+    // Guest checkout
+    async createGuestOrder(data: {
+        guest_email: string;
+        guest_name: string;
+        guest_phone: string;
+        guest_address: string;
+        notes?: string;
+        items: { product_id: string; variant_id?: string; quantity: number }[];
+    }) {
+        return this.request<Order>('/guest/order', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async trackGuestOrder(orderNumber: string, email: string) {
+        return this.request<Order>('/guest/track', {
+            method: 'POST',
+            body: JSON.stringify({ order_number: orderNumber, email }),
+        });
+    }
+
+    async createGuestPayment(orderId: string) {
+        return this.request<{ snap_token: string; redirect_url: string }>(`/guest/payment/${orderId}`, {
+            method: 'POST',
         });
     }
 }
@@ -348,6 +382,8 @@ export interface ProductsParams {
     limit?: number;
     sort?: string;
     order?: 'asc' | 'desc';
+    minPrice?: number;
+    maxPrice?: number;
 }
 
 export interface ProductsResponse {
@@ -420,14 +456,26 @@ export interface OrderItem {
 
 export interface Order {
     id: string;
-    user_id: string;
-    address_id: string;
+    order_number?: string;
+    user_id?: string;
+    user?: User;
+    address_id?: string;
     address?: Address;
     status: 'pending' | 'paid' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
     subtotal: number;
     shipping_fee: number;
     total: number;
     notes: string;
+    // Shipping info
+    tracking_number?: string;
+    shipped_at?: string;
+    delivered_at?: string;
+    // Guest checkout fields
+    guest_email?: string;
+    guest_name?: string;
+    guest_phone?: string;
+    guest_address?: string;
+
     items: OrderItem[];
     payment?: Payment;
     created_at: string;

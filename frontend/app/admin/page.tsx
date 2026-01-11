@@ -31,25 +31,34 @@ export default function AdminDashboardPage() {
     useEffect(() => {
         const fetchStats = async () => {
             try {
-                // Fetch orders
-                const ordersData = await api.getOrders(1);
+                // Fetch orders using admin endpoint
+                const ordersData = await api.adminGetAllOrders(1);
 
                 // Fetch products
                 const productsData = await api.getProducts({ limit: 100 });
 
+                // Fetch users using admin endpoint
+                let usersCount = 0;
+                try {
+                    const users = await api.adminGetAllUsers();
+                    usersCount = users?.length || 0;
+                } catch (e) {
+                    console.log('Could not fetch users count:', e);
+                }
+
                 // Calculate stats
-                const totalRevenue = ordersData.orders
-                    .filter(o => o.status !== 'cancelled')
+                const totalRevenue = (ordersData.orders || [])
+                    .filter(o => o.status !== 'cancelled' && o.status !== 'pending')
                     .reduce((sum, o) => sum + o.total, 0);
 
                 const lowStock = productsData.products.filter(p => p.stock < 10);
 
                 setStats({
-                    totalOrders: ordersData.total,
+                    totalOrders: ordersData.total || 0,
                     totalRevenue,
                     totalProducts: productsData.total,
-                    totalUsers: 0, // Would need admin API
-                    recentOrders: ordersData.orders.slice(0, 5),
+                    totalUsers: usersCount,
+                    recentOrders: (ordersData.orders || []).slice(0, 5),
                     lowStockProducts: lowStock.slice(0, 5),
                 });
             } catch (error) {

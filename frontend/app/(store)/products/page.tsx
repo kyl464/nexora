@@ -22,6 +22,8 @@ export default function ProductsPage() {
     const [sort, setSort] = useState(searchParams.get('sort') || 'created_at');
     const [order, setOrder] = useState<'asc' | 'desc'>((searchParams.get('order') as 'asc' | 'desc') || 'desc');
     const [page, setPage] = useState(1);
+    const [minPrice, setMinPrice] = useState('');
+    const [maxPrice, setMaxPrice] = useState('');
 
     useEffect(() => {
         const fetchCategories = async () => {
@@ -47,6 +49,8 @@ export default function ProductsPage() {
                     page,
                     limit: 12,
                     featured: searchParams.get('featured') === 'true' || undefined,
+                    minPrice: minPrice ? parseFloat(minPrice) : undefined,
+                    maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
                 });
                 setProducts(response.products);
                 setTotalPages(response.pages);
@@ -58,17 +62,19 @@ export default function ProductsPage() {
         };
 
         fetchProducts();
-    }, [search, category, sort, order, page, searchParams]);
+    }, [search, category, sort, order, page, searchParams, minPrice, maxPrice]);
 
     const clearFilters = () => {
         setSearch('');
         setCategory('');
         setSort('created_at');
         setOrder('desc');
+        setMinPrice('');
+        setMaxPrice('');
         setPage(1);
     };
 
-    const hasActiveFilters = search || category || sort !== 'created_at' || order !== 'desc';
+    const hasActiveFilters = search || category || sort !== 'created_at' || order !== 'desc' || minPrice || maxPrice;
 
     return (
         <div className="min-h-screen py-8">
@@ -147,42 +153,48 @@ export default function ProductsPage() {
                                 </button>
                             </div>
 
-                            {/* Categories */}
+                            {/* Category Filter */}
                             <div className="mb-6">
-                                <h4 className="font-semibold text-white mb-3">Categories</h4>
-                                <div className="space-y-1">
-                                    <button
-                                        onClick={() => {
-                                            setCategory('');
+                                <h4 className="font-semibold text-white mb-3">Category</h4>
+                                <select
+                                    value={category}
+                                    onChange={(e) => {
+                                        setCategory(e.target.value);
+                                        setPage(1);
+                                    }}
+                                    className="input w-full"
+                                >
+                                    <option value="">All Categories</option>
+                                    {categories.map((cat) => (
+                                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Price Filter */}
+                            <div className="mb-6">
+                                <h4 className="font-semibold text-white mb-3">Price Range</h4>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="number"
+                                        placeholder="Min"
+                                        value={minPrice}
+                                        onChange={(e) => {
+                                            setMinPrice(e.target.value);
                                             setPage(1);
                                         }}
-                                        className={cn(
-                                            'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors',
-                                            !category
-                                                ? 'bg-primary/10 text-primary'
-                                                : 'text-slate-400 hover:text-white hover:bg-dark-700'
-                                        )}
-                                    >
-                                        All Categories
-                                    </button>
-                                    {categories.map((cat) => (
-                                        <button
-                                            key={cat.id}
-                                            onClick={() => {
-                                                setCategory(cat.id);
-                                                setPage(1);
-                                            }}
-                                            className={cn(
-                                                'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2',
-                                                category === cat.id
-                                                    ? 'bg-primary/10 text-primary'
-                                                    : 'text-slate-400 hover:text-white hover:bg-dark-700'
-                                            )}
-                                        >
-                                            <span>{cat.icon}</span>
-                                            {cat.name}
-                                        </button>
-                                    ))}
+                                        className="input w-full text-sm"
+                                    />
+                                    <input
+                                        type="number"
+                                        placeholder="Max"
+                                        value={maxPrice}
+                                        onChange={(e) => {
+                                            setMaxPrice(e.target.value);
+                                            setPage(1);
+                                        }}
+                                        className="input w-full text-sm"
+                                    />
                                 </div>
                             </div>
 

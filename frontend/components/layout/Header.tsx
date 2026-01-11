@@ -11,11 +11,9 @@ import { cn } from '@/lib/utils';
 export function Header() {
     const pathname = usePathname();
     const { user, isAuthenticated, login, logout } = useAuth();
-    const { cart } = useCart();
+    const { cartCount } = useCart();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-
-    const cartCount = cart?.count || 0;
 
     const navLinks = [
         { href: '/', label: 'Home' },

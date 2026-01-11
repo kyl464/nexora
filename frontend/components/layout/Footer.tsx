@@ -17,6 +17,7 @@ export function Footer() {
             { href: '/account/addresses', label: 'Addresses' },
         ],
         support: [
+            { href: '/track-order', label: 'Track Order' },
             { href: '/about', label: 'About Us' },
             { href: '/contact', label: 'Contact Us' },
             { href: '/privacy', label: 'Privacy Policy' },

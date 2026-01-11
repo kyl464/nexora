@@ -3,32 +3,15 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Trash2, Minus, Plus, ShoppingBag, ArrowRight } from 'lucide-react';
+import { Trash2, Minus, Plus, ShoppingBag, ArrowRight, UserPlus } from 'lucide-react';
 import { useAuth, useCart } from '@/lib/context';
 import { Button } from '@/components/ui/Button';
 import { formatPrice } from '@/lib/utils';
 
 export default function CartPage() {
     const { isAuthenticated, login } = useAuth();
-    const { cart, isLoading, updateQuantity, removeItem, clearCart } = useCart();
+    const { cart, guestCart, isLoading, updateQuantity, removeItem, clearCart, cartCount } = useCart();
     const [updatingItems, setUpdatingItems] = useState<Set<string>>(new Set());
-
-    if (!isAuthenticated) {
-        return (
-            <div className="min-h-screen flex items-center justify-center px-4">
-                <div className="text-center">
-                    <div className="w-20 h-20 rounded-full bg-dark-700 flex items-center justify-center mx-auto mb-6">
-                        <ShoppingBag className="w-10 h-10 text-slate-500" />
-                    </div>
-                    <h2 className="text-2xl font-bold text-white mb-2">Sign in to view your cart</h2>
-                    <p className="text-slate-400 mb-6">
-                        Create an account or sign in to start shopping
-                    </p>
-                    <Button onClick={login}>Sign In</Button>
-                </div>
-            </div>
-        );
-    }
 
     if (isLoading) {
         return (
@@ -45,8 +28,20 @@ export default function CartPage() {
         );
     }
 
-    const items = cart?.items || [];
-    const subtotal = cart?.subtotal || 0;
+    // Use either authenticated cart or guest cart
+    const items = isAuthenticated
+        ? (cart?.items || [])
+        : guestCart.filter(item => item.product).map(item => ({
+            id: item.productId,
+            product: item.product!,
+            quantity: item.quantity,
+            variant: null,
+        }));
+
+    const subtotal = isAuthenticated
+        ? (cart?.subtotal || 0)
+        : guestCart.reduce((sum, item) => sum + (item.product?.base_price || 0) * item.quantity, 0);
+
     const shippingFee = subtotal > 500000 ? 0 : 15000;
     const total = subtotal + shippingFee;
 
@@ -98,12 +93,28 @@ export default function CartPage() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex items-center justify-between mb-8">
                     <h1 className="font-display text-3xl font-bold text-white">
-                        Shopping Cart ({items.length})
+                        Shopping Cart ({cartCount})
                     </h1>
                     <Button variant="ghost" onClick={clearCart} className="text-red-400 hover:text-red-300">
                         Clear Cart
                     </Button>
                 </div>
+
+                {/* Guest notice */}
+                {!isAuthenticated && (
+                    <div className="card p-4 mb-6 bg-primary/5 border-primary/20">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <UserPlus className="w-5 h-5 text-primary" />
+                                <div>
+                                    <p className="text-white font-medium">Shopping as Guest</p>
+                                    <p className="text-sm text-slate-400">Sign in to save your cart and track orders</p>
+                                </div>
+                            </div>
+                            <Button size="sm" variant="outline" onClick={login}>Sign In</Button>
+                        </div>
+                    </div>
+                )}
 
                 <div className="grid lg:grid-cols-3 gap-8">
                     {/* Cart Items */}

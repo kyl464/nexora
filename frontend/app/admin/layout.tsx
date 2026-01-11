@@ -11,7 +11,8 @@ import {
     BarChart3,
     Settings,
     ChevronRight,
-    LogOut
+    LogOut,
+    Grid3X3
 } from 'lucide-react';
 import { useAuth } from '@/lib/context';
 import { cn } from '@/lib/utils';
@@ -19,6 +20,7 @@ import { cn } from '@/lib/utils';
 const sidebarLinks = [
     { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/admin/products', label: 'Products', icon: Package },
+    { href: '/admin/categories', label: 'Categories', icon: Grid3X3 },
     { href: '/admin/orders', label: 'Orders', icon: ShoppingCart },
     { href: '/admin/users', label: 'Users', icon: Users },
     { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },

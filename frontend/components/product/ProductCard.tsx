@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Heart, ShoppingCart, Star } from 'lucide-react';
 import { Product } from '@/lib/api';
 import { formatPrice, cn } from '@/lib/utils';
-import { useAuth, useCart, useWishlist } from '@/lib/context';
+import { useAuth, useCart, useWishlist, useToast } from '@/lib/context';
 import { useState } from 'react';
 
 interface ProductCardProps {
@@ -17,6 +17,7 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
     const { isAuthenticated, login } = useAuth();
     const { addToCart } = useCart();
     const { isInWishlist, addToWishlist, removeFromWishlist } = useWishlist();
+    const { showCartToast } = useToast();
     const [isAddingToCart, setIsAddingToCart] = useState(false);
     const [isTogglingWishlist, setIsTogglingWishlist] = useState(false);
 
@@ -27,14 +28,10 @@ export function ProductCard({ product, priority = false }: ProductCardProps) {
         e.preventDefault();
         e.stopPropagation();
 
-        if (!isAuthenticated) {
-            login();
-            return;
-        }
-
         setIsAddingToCart(true);
         try {
             await addToCart(product.id);
+            showCartToast(product.name);
         } catch (error) {
             console.error('Failed to add to cart:', error);
         } finally {

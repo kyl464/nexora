@@ -21,21 +21,34 @@ const (
 
 // Order represents a customer order
 type Order struct {
-	ID          uuid.UUID      `gorm:"type:uuid;primary_key" json:"id"`
-	UserID      uuid.UUID      `gorm:"type:uuid;not null" json:"user_id"`
-	AddressID   uuid.UUID      `gorm:"type:uuid" json:"address_id"`
-	Status      OrderStatus    `gorm:"default:pending" json:"status"`
-	Subtotal    float64        `gorm:"not null" json:"subtotal"`
-	ShippingFee float64        `gorm:"default:0" json:"shipping_fee"`
-	Total       float64        `gorm:"not null" json:"total"`
-	Notes       string         `json:"notes"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+	ID          uuid.UUID   `gorm:"type:uuid;primary_key" json:"id"`
+	OrderNumber string      `gorm:"uniqueIndex" json:"order_number"`
+	UserID      *uuid.UUID  `gorm:"type:uuid" json:"user_id,omitempty"`
+	AddressID   *uuid.UUID  `gorm:"type:uuid" json:"address_id,omitempty"`
+	Status      OrderStatus `gorm:"default:pending" json:"status"`
+	Subtotal    float64     `gorm:"not null" json:"subtotal"`
+	ShippingFee float64     `gorm:"default:0" json:"shipping_fee"`
+	Total       float64     `gorm:"not null" json:"total"`
+	Notes       string      `json:"notes"`
+
+	// Shipping info
+	TrackingNumber string     `json:"tracking_number,omitempty"`
+	ShippedAt      *time.Time `json:"shipped_at,omitempty"`
+	DeliveredAt    *time.Time `json:"delivered_at,omitempty"`
+
+	// Guest checkout fields
+	GuestEmail   string `json:"guest_email,omitempty"`
+	GuestName    string `json:"guest_name,omitempty"`
+	GuestPhone   string `json:"guest_phone,omitempty"`
+	GuestAddress string `json:"guest_address,omitempty"`
+
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 
 	// Relations
-	User    User        `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Address Address     `gorm:"foreignKey:AddressID" json:"address,omitempty"`
+	User    *User       `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Address *Address    `gorm:"foreignKey:AddressID" json:"address,omitempty"`
 	Items   []OrderItem `gorm:"foreignKey:OrderID" json:"items,omitempty"`
 	Payment *Payment    `gorm:"foreignKey:OrderID" json:"payment,omitempty"`
 }

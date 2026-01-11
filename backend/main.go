@@ -34,6 +34,11 @@ func main() {
 		&models.Payment{},
 	)
 
+	// Fix NOT NULL constraint on user_id and address_id for guest orders
+	log.Println("Running migrations for guest orders support...")
+	db.Exec("ALTER TABLE orders ALTER COLUMN user_id DROP NOT NULL")
+	db.Exec("ALTER TABLE orders ALTER COLUMN address_id DROP NOT NULL")
+
 	// Initialize OAuth
 	handlers.InitOAuth()
 
@@ -109,6 +114,11 @@ func main() {
 			orders.POST("/:id/cancel", handlers.CancelOrder)
 		}
 
+		// Guest checkout routes (public)
+		api.POST("/guest/order", handlers.CreateGuestOrder)
+		api.POST("/guest/track", handlers.TrackOrder)
+		api.POST("/guest/payment/:order_id", handlers.CreateGuestPayment)
+
 		// Payment routes
 		payments := api.Group("/payments")
 		{
@@ -149,6 +159,7 @@ func main() {
 
 			// Order management
 			admin.GET("/orders", handlers.GetAllOrders)
+			admin.GET("/orders/:id", handlers.AdminGetOrderDetail)
 			admin.PUT("/orders/:id/status", handlers.UpdateOrderStatus)
 
 			// User management

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { api, User, CartResponse, WishlistItem } from '@/lib/api';
+import { api, User, CartResponse, WishlistItem, Product } from '@/lib/api';
 
 interface AuthContextType {
     user: User | null;
@@ -13,14 +13,23 @@ interface AuthContextType {
     setUser: (user: User | null) => void;
 }
 
+// Guest cart item for localStorage
+interface GuestCartItem {
+    productId: string;
+    product?: Product;
+    quantity: number;
+}
+
 interface CartContextType {
     cart: CartResponse | null;
+    guestCart: GuestCartItem[];
     isLoading: boolean;
     addToCart: (productId: string, variantId?: string, quantity?: number) => Promise<void>;
     updateQuantity: (itemId: string, quantity: number) => Promise<void>;
     removeItem: (itemId: string) => Promise<void>;
     clearCart: () => Promise<void>;
     refreshCart: () => Promise<void>;
+    cartCount: number;
 }
 
 interface WishlistContextType {
@@ -35,6 +44,8 @@ interface WishlistContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const CartContext = createContext<CartContextType | undefined>(undefined);
 const WishlistContext = createContext<WishlistContextType | undefined>(undefined);
+
+const GUEST_CART_KEY = 'nexora_guest_cart';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
@@ -82,12 +93,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
     const [cart, setCart] = useState<CartResponse | null>(null);
+    const [guestCart, setGuestCart] = useState<GuestCartItem[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const { isAuthenticated } = useAuth();
 
+    // Load guest cart from localStorage
+    useEffect(() => {
+        if (!isAuthenticated) {
+            const savedCart = localStorage.getItem(GUEST_CART_KEY);
+            if (savedCart) {
+                try {
+                    setGuestCart(JSON.parse(savedCart));
+                } catch {
+                    setGuestCart([]);
+                }
+            }
+        }
+    }, [isAuthenticated]);
+
+    // Save guest cart to localStorage
+    useEffect(() => {
+        if (!isAuthenticated && guestCart.length > 0) {
+            localStorage.setItem(GUEST_CART_KEY, JSON.stringify(guestCart));
+        }
+    }, [guestCart, isAuthenticated]);
+
     const refreshCart = useCallback(async () => {
         if (!isAuthenticated) {
-            setCart(null);
+            // For guests, load product details for cart items
+            if (guestCart.length > 0) {
+                const updatedCart = await Promise.all(
+                    guestCart.map(async (item) => {
+                        if (!item.product) {
+                            try {
+                                const { product } = await api.getProduct(item.productId);
+                                return { ...item, product };
+                            } catch {
+                                return item;
+                            }
+                        }
+                        return item;
+                    })
+                );
+                setGuestCart(updatedCart);
+            }
             return;
         }
 
@@ -95,39 +144,95 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         try {
             const data = await api.getCart();
             setCart(data);
+            // Clear guest cart when logged in
+            localStorage.removeItem(GUEST_CART_KEY);
+            setGuestCart([]);
         } catch {
             setCart(null);
         } finally {
             setIsLoading(false);
         }
-    }, [isAuthenticated]);
+    }, [isAuthenticated, guestCart.length]);
 
     useEffect(() => {
         refreshCart();
-    }, [refreshCart]);
+    }, [isAuthenticated]);
 
-    const addToCart = async (productId: string, variantId?: string, quantity?: number) => {
-        await api.addToCart(productId, variantId, quantity);
-        await refreshCart();
+    const addToCart = async (productId: string, variantId?: string, quantity: number = 1) => {
+        if (isAuthenticated) {
+            await api.addToCart(productId, variantId, quantity);
+            await refreshCart();
+        } else {
+            // Guest cart - add to localStorage
+            const existingIndex = guestCart.findIndex(item => item.productId === productId);
+            if (existingIndex >= 0) {
+                const updated = [...guestCart];
+                updated[existingIndex].quantity += quantity;
+                setGuestCart(updated);
+            } else {
+                // Fetch product details
+                try {
+                    const { product } = await api.getProduct(productId);
+                    setGuestCart([...guestCart, { productId, product, quantity }]);
+                } catch {
+                    setGuestCart([...guestCart, { productId, quantity }]);
+                }
+            }
+        }
     };
 
     const updateQuantity = async (itemId: string, quantity: number) => {
-        await api.updateCartItem(itemId, quantity);
-        await refreshCart();
+        if (isAuthenticated) {
+            await api.updateCartItem(itemId, quantity);
+            await refreshCart();
+        } else {
+            // Guest cart update (itemId is productId for guest)
+            const updated = guestCart.map(item =>
+                item.productId === itemId ? { ...item, quantity } : item
+            );
+            setGuestCart(updated);
+        }
     };
 
     const removeItem = async (itemId: string) => {
-        await api.removeFromCart(itemId);
-        await refreshCart();
+        if (isAuthenticated) {
+            await api.removeFromCart(itemId);
+            await refreshCart();
+        } else {
+            // Guest cart remove (itemId is productId for guest)
+            const updated = guestCart.filter(item => item.productId !== itemId);
+            setGuestCart(updated);
+            localStorage.setItem(GUEST_CART_KEY, JSON.stringify(updated));
+        }
     };
 
     const clearCart = async () => {
-        await api.clearCart();
-        await refreshCart();
+        if (isAuthenticated) {
+            await api.clearCart();
+            await refreshCart();
+        } else {
+            setGuestCart([]);
+            localStorage.removeItem(GUEST_CART_KEY);
+        }
     };
 
+    // Calculate cart count
+    const cartCount = isAuthenticated
+        ? (cart?.count || 0)
+        : guestCart.reduce((sum, item) => sum + item.quantity, 0);
+
     return (
-        <CartContext.Provider value={{ cart, isLoading, addToCart, updateQuantity, removeItem, clearCart, refreshCart }}>
+        <CartContext.Provider value={{
+            cart,
+            guestCart,
+            isLoading,
+            addToCart,
+            updateQuantity,
+            removeItem,
+            clearCart,
+            refreshCart,
+            cartCount
+        }}>
             {children}
         </CartContext.Provider>
     );
@@ -204,12 +309,20 @@ export function useWishlist() {
     return context;
 }
 
+// Re-export toast for convenience
+export { useToast, ToastProvider } from '@/components/ui/Toast';
+
 export function Providers({ children }: { children: React.ReactNode }) {
+    // Import dynamically to avoid circular deps
+    const { ToastProvider } = require('@/components/ui/Toast');
+
     return (
         <AuthProvider>
             <CartProvider>
                 <WishlistProvider>
-                    {children}
+                    <ToastProvider>
+                        {children}
+                    </ToastProvider>
                 </WishlistProvider>
             </CartProvider>
         </AuthProvider>

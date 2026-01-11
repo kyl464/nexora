@@ -149,6 +149,108 @@ func CreatePayment(c *gin.Context) {
 	})
 }
 
+// CreateGuestPayment creates a payment for a guest order
+func CreateGuestPayment(c *gin.Context) {
+	orderID := c.Param("order_id")
+
+	var order models.Order
+	if err := config.DB.Where("id = ? AND user_id IS NULL", orderID).First(&order).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Guest order not found"})
+		return
+	}
+
+	if order.Status != models.OrderStatusPending {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Payment already processed or order cancelled"})
+		return
+	}
+
+	// Check if payment already exists
+	var existingPayment models.Payment
+	if err := config.DB.Where("order_id = ? AND status != ?", order.ID, models.PaymentStatusFailed).First(&existingPayment).Error; err == nil {
+		if existingPayment.Status == models.PaymentStatusPending && existingPayment.SnapToken != "" {
+			c.JSON(http.StatusOK, gin.H{
+				"snap_token":   existingPayment.SnapToken,
+				"redirect_url": existingPayment.RedirectURL,
+			})
+			return
+		}
+	}
+
+	// Create Midtrans Snap token
+	midtransOrderID := fmt.Sprintf("NEXORA-GUEST-%s-%d", order.ID.String()[:8], time.Now().Unix())
+
+	snapRequest := map[string]interface{}{
+		"transaction_details": map[string]interface{}{
+			"order_id":     midtransOrderID,
+			"gross_amount": int(order.Total),
+		},
+		"customer_details": map[string]interface{}{
+			"first_name": order.GuestName,
+			"email":      order.GuestEmail,
+			"phone":      order.GuestPhone,
+		},
+		"callbacks": map[string]interface{}{
+			"finish": config.AppConfig.FrontendURL + "/track-order?order=" + order.OrderNumber + "&email=" + order.GuestEmail,
+		},
+	}
+
+	jsonBody, _ := json.Marshal(snapRequest)
+
+	// Determine Midtrans URL based on environment
+	midtransURL := "https://app.sandbox.midtrans.com/snap/v1/transactions"
+	if config.AppConfig.MidtransIsProduction {
+		midtransURL = "https://app.midtrans.com/snap/v1/transactions"
+	}
+
+	req, _ := http.NewRequest("POST", midtransURL, bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.SetBasicAuth(config.AppConfig.MidtransServerKey, "")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to connect to payment gateway"})
+		return
+	}
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	resp.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	var snapResp MidtransSnapResponse
+	if err := json.NewDecoder(resp.Body).Decode(&snapResp); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse payment response"})
+		return
+	}
+
+	if snapResp.Token == "" {
+		fmt.Printf("Midtrans Guest Error Body: %s\n", string(bodyBytes))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create payment token"})
+		return
+	}
+
+	// Create payment record
+	payment := models.Payment{
+		OrderID:     order.ID,
+		MidtransID:  midtransOrderID,
+		Status:      models.PaymentStatusPending,
+		Amount:      order.Total,
+		SnapToken:   snapResp.Token,
+		RedirectURL: snapResp.RedirectURL,
+	}
+
+	if err := config.DB.Create(&payment).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save payment"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"snap_token":   snapResp.Token,
+		"redirect_url": snapResp.RedirectURL,
+	})
+}
+
 // PaymentNotification handles Midtrans webhook notifications
 func PaymentNotification(c *gin.Context) {
 	var notification map[string]interface{}
@@ -192,14 +294,30 @@ func PaymentNotification(c *gin.Context) {
 		payment.PaidAt = &now
 		payment.Method = paymentType
 
-		// Update order status
-		config.DB.Model(&models.Order{}).Where("id = ?", payment.OrderID).Update("status", models.OrderStatusPaid)
+		// Update order status to processing (auto-process after payment)
+		config.DB.Model(&models.Order{}).Where("id = ?", payment.OrderID).Update("status", models.OrderStatusProcessing)
 
 	case "deny", "cancel":
 		payment.Status = models.PaymentStatusFailed
+		// Restore stock
+		var orderItems []models.OrderItem
+		config.DB.Where("order_id = ?", payment.OrderID).Find(&orderItems)
+		for _, item := range orderItems {
+			config.DB.Model(&models.Product{}).Where("id = ?", item.ProductID).
+				Update("stock", config.DB.Raw("stock + ?", item.Quantity))
+		}
+		config.DB.Model(&models.Order{}).Where("id = ?", payment.OrderID).Update("status", models.OrderStatusCancelled)
 
 	case "expire":
 		payment.Status = models.PaymentStatusExpired
+		// Restore stock
+		var orderItems []models.OrderItem
+		config.DB.Where("order_id = ?", payment.OrderID).Find(&orderItems)
+		for _, item := range orderItems {
+			config.DB.Model(&models.Product{}).Where("id = ?", item.ProductID).
+				Update("stock", config.DB.Raw("stock + ?", item.Quantity))
+		}
+		config.DB.Model(&models.Order{}).Where("id = ?", payment.OrderID).Update("status", models.OrderStatusCancelled)
 	}
 
 	config.DB.Save(&payment)
@@ -252,7 +370,8 @@ func SimulatePayment(c *gin.Context) {
 	payment.PaidAt = &now
 
 	config.DB.Save(&payment)
-	config.DB.Model(&models.Order{}).Where("id = ?", parsedOrderID).Update("status", models.OrderStatusPaid)
+	// Set to processing instead of paid (auto-process after payment)
+	config.DB.Model(&models.Order{}).Where("id = ?", parsedOrderID).Update("status", models.OrderStatusProcessing)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Payment simulated successfully"})
 }
