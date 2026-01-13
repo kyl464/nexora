@@ -3,7 +3,11 @@ import Image from 'next/image';
 import { ArrowRight, Sparkles, Truck, Shield, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ProductCard, ProductCardSkeleton } from '@/components/product/ProductCard';
-import { api, Category, Product } from '@/lib/api';
+import { api, Product } from '@/lib/api';
+
+// Force dynamic rendering - no caching
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 async function getFeaturedProducts(): Promise<Product[]> {
     try {
@@ -14,19 +18,8 @@ async function getFeaturedProducts(): Promise<Product[]> {
     }
 }
 
-async function getCategories(): Promise<Category[]> {
-    try {
-        return await api.getCategories();
-    } catch {
-        return [];
-    }
-}
-
 export default async function HomePage() {
-    const [featuredProducts, categories] = await Promise.all([
-        getFeaturedProducts(),
-        getCategories(),
-    ]);
+    const featuredProducts = await getFeaturedProducts();
 
     return (
         <div className="min-h-screen">
@@ -157,36 +150,51 @@ export default async function HomePage() {
                 </div>
             </section>
 
-            {/* Categories */}
-            {categories.length > 0 && (
-                <section className="py-16 lg:py-24">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                        <div className="text-center mb-12">
-                            <h2 className="font-display text-3xl lg:text-4xl font-bold text-white mb-4">
-                                Shop by Category
-                            </h2>
-                            <p className="text-slate-400 max-w-2xl mx-auto">
-                                Browse our curated collections and find exactly what you&apos;re looking for
+            {/* Why Shop With Us */}
+            <section className="py-16 lg:py-24">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="text-center mb-12">
+                        <h2 className="font-display text-3xl lg:text-4xl font-bold text-white mb-4">
+                            Why Shop With Us
+                        </h2>
+                        <p className="text-slate-400 max-w-2xl mx-auto">
+                            We&apos;re committed to providing the best shopping experience for our customers
+                        </p>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        <div className="text-center p-8 rounded-2xl bg-dark-800 border border-dark-700 hover:border-primary/30 transition-colors">
+                            <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                                <Shield className="w-8 h-8 text-primary" />
+                            </div>
+                            <h3 className="font-semibold text-white text-xl mb-3">Guaranteed Quality</h3>
+                            <p className="text-slate-400">
+                                All our products are carefully curated and quality-checked before being listed in our store.
                             </p>
                         </div>
 
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-                            {categories.map((category) => (
-                                <Link
-                                    key={category.id}
-                                    href={`/products?category=${category.id}`}
-                                    className="group p-6 rounded-2xl bg-dark-800 border border-dark-700 hover:border-primary/50 hover:shadow-glow-sm transition-all text-center"
-                                >
-                                    <div className="text-4xl mb-3">{category.icon}</div>
-                                    <h3 className="font-medium text-white group-hover:text-primary transition-colors">
-                                        {category.name}
-                                    </h3>
-                                </Link>
-                            ))}
+                        <div className="text-center p-8 rounded-2xl bg-dark-800 border border-dark-700 hover:border-secondary/30 transition-colors">
+                            <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-secondary/20 to-secondary/5 flex items-center justify-center">
+                                <Truck className="w-8 h-8 text-secondary" />
+                            </div>
+                            <h3 className="font-semibold text-white text-xl mb-3">Fast Delivery</h3>
+                            <p className="text-slate-400">
+                                Get your orders delivered quickly with our reliable shipping partners across Indonesia.
+                            </p>
+                        </div>
+
+                        <div className="text-center p-8 rounded-2xl bg-dark-800 border border-dark-700 hover:border-emerald-500/30 transition-colors md:col-span-2 lg:col-span-1">
+                            <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 flex items-center justify-center">
+                                <CreditCard className="w-8 h-8 text-emerald-500" />
+                            </div>
+                            <h3 className="font-semibold text-white text-xl mb-3">Secure Payment</h3>
+                            <p className="text-slate-400">
+                                Shop with confidence using our secure payment gateway with multiple payment options.
+                            </p>
                         </div>
                     </div>
-                </section>
-            )}
+                </div>
+            </section>
 
             {/* Featured Products */}
             <section className="py-16 lg:py-24 bg-dark-800/30">
@@ -212,9 +220,14 @@ export default async function HomePage() {
                                 <ProductCard key={product.id} product={product} priority={index < 4} />
                             ))
                         ) : (
-                            Array.from({ length: 4 }).map((_, i) => (
-                                <ProductCardSkeleton key={i} />
-                            ))
+                            <div className="col-span-full text-center py-12">
+                                <Sparkles className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                                <p className="text-slate-400 mb-4">No featured products yet</p>
+                                <Button href="/products" variant="outline" size="sm">
+                                    Browse All Products
+                                    <ArrowRight className="w-4 h-4" />
+                                </Button>
+                            </div>
                         )}
                     </div>
                 </div>

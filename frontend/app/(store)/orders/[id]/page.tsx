@@ -182,7 +182,7 @@ export default function OrderDetailPage() {
                     <ChevronRight className="w-4 h-4" />
                     <Link href="/account/orders" className="hover:text-white">Orders</Link>
                     <ChevronRight className="w-4 h-4" />
-                    <span className="text-white">Order #{order.id.slice(0, 8)}</span>
+                    <span className="text-white">Order #{order.order_number}</span>
                 </nav>
 
                 {/* Payment Banner */}
@@ -216,7 +216,7 @@ export default function OrderDetailPage() {
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                         <div>
                             <h1 className="font-display text-2xl font-bold text-white">
-                                Order #{order.id.slice(0, 8)}
+                                Order #{order.order_number}
                             </h1>
                             <p className="text-slate-400 mt-1">
                                 Placed on {formatDateTime(order.created_at)}
@@ -229,39 +229,73 @@ export default function OrderDetailPage() {
                     </div>
 
                     {/* Order Status Timeline */}
-                    <div className="flex items-center justify-between relative">
-                        <div className="absolute top-4 left-0 right-0 h-0.5 bg-dark-700" />
-                        {['pending', 'paid', 'processing', 'shipped', 'delivered'].map((status, index) => {
-                            const isCompleted = ['pending', 'paid', 'processing', 'shipped', 'delivered'].indexOf(order.status) >= index;
-                            const isCurrent = order.status === status;
-                            return (
-                                <div key={status} className="relative flex flex-col items-center">
-                                    <div
-                                        className={cn(
-                                            'w-8 h-8 rounded-full flex items-center justify-center z-10',
-                                            isCompleted
-                                                ? 'bg-primary text-white'
-                                                : 'bg-dark-700 text-slate-500'
-                                        )}
-                                    >
-                                        {isCompleted ? (
-                                            <CheckCircle className="w-4 h-4" />
-                                        ) : (
-                                            <span className="text-xs">{index + 1}</span>
-                                        )}
+                    {order.status === 'cancelled' ? (
+                        // Cancelled order - show simple cancelled status
+                        <div className="flex items-center justify-center py-4">
+                            <div className="flex items-center gap-3 px-6 py-3 rounded-full bg-red-500/10">
+                                <XCircle className="w-6 h-6 text-red-500" />
+                                <span className="text-red-500 font-medium">Order Cancelled</span>
+                            </div>
+                        </div>
+                    ) : (
+                        // Normal order timeline
+                        <div className="flex items-center justify-between relative">
+                            <div className="absolute top-4 left-0 right-0 h-0.5 bg-dark-700" />
+                            {['pending', 'paid', 'processing', 'shipped', 'delivered'].map((status, index) => {
+                                const isCompleted = ['pending', 'paid', 'processing', 'shipped', 'delivered'].indexOf(order.status) >= index;
+                                const isCurrent = order.status === status;
+                                return (
+                                    <div key={status} className="relative flex flex-col items-center">
+                                        <div
+                                            className={cn(
+                                                'w-8 h-8 rounded-full flex items-center justify-center z-10',
+                                                isCompleted
+                                                    ? 'bg-primary text-white'
+                                                    : 'bg-dark-700 text-slate-500'
+                                            )}
+                                        >
+                                            {isCompleted ? (
+                                                <CheckCircle className="w-4 h-4" />
+                                            ) : (
+                                                <span className="text-xs">{index + 1}</span>
+                                            )}
+                                        </div>
+                                        <span
+                                            className={cn(
+                                                'text-xs mt-2 text-center',
+                                                isCurrent ? 'text-primary font-medium' : 'text-slate-500'
+                                            )}
+                                        >
+                                            {getStatusLabel(status)}
+                                        </span>
                                     </div>
-                                    <span
-                                        className={cn(
-                                            'text-xs mt-2 text-center',
-                                            isCurrent ? 'text-primary font-medium' : 'text-slate-500'
-                                        )}
-                                    >
-                                        {getStatusLabel(status)}
-                                    </span>
-                                </div>
-                            );
-                        })}
-                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {/* Cancel Button for Pending Orders */}
+                    {order.status === 'pending' && (
+                        <div className="mt-6 pt-6 border-t border-dark-700 flex justify-end">
+                            <Button
+                                variant="outline"
+                                className="text-red-400 border-red-500/50 hover:bg-red-500/10"
+                                onClick={async () => {
+                                    if (!confirm('Are you sure you want to cancel this order?')) return;
+                                    try {
+                                        await api.cancelOrder(order.id);
+                                        window.location.reload();
+                                    } catch (error) {
+                                        console.error('Failed to cancel order:', error);
+                                        alert('Failed to cancel order');
+                                    }
+                                }}
+                            >
+                                <XCircle className="w-4 h-4" />
+                                Cancel Order
+                            </Button>
+                        </div>
+                    )}
                 </div>
 
                 <div className="grid lg:grid-cols-3 gap-8">
@@ -315,6 +349,34 @@ export default function OrderDetailPage() {
                                     {order.address.street}<br />
                                     {order.address.city}, {order.address.state} {order.address.postal_code}
                                 </p>
+                            </div>
+                        )}
+
+                        {/* Tracking Number - Show when shipped or delivered */}
+                        {(order.status === 'shipped' || order.status === 'delivered') && order.tracking_number && (
+                            <div className="card p-6">
+                                <h3 className="font-semibold text-white mb-4 flex items-center gap-2">
+                                    <Truck className="w-5 h-5 text-primary" />
+                                    Shipping Info
+                                </h3>
+                                <div className="space-y-3">
+                                    <div>
+                                        <p className="text-sm text-slate-400">Tracking Number</p>
+                                        <p className="font-mono text-white text-lg">{order.tracking_number}</p>
+                                    </div>
+                                    {order.shipped_at && (
+                                        <div>
+                                            <p className="text-sm text-slate-400">Shipped On</p>
+                                            <p className="text-slate-300">{formatDateTime(order.shipped_at)}</p>
+                                        </div>
+                                    )}
+                                    {order.delivered_at && (
+                                        <div>
+                                            <p className="text-sm text-slate-400">Delivered On</p>
+                                            <p className="text-slate-300">{formatDateTime(order.delivered_at)}</p>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
 

@@ -157,19 +157,25 @@ export default function AdminOrderDetailPage() {
                             <h2 className="font-semibold text-white mb-4">Shipping Details</h2>
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm text-slate-400 mb-2">Tracking Number</label>
+                                    <label className="block text-sm text-slate-400 mb-2">
+                                        Tracking Number <span className="text-red-500">*</span>
+                                    </label>
                                     <input
                                         type="text"
                                         value={trackingNumber}
                                         onChange={(e) => setTrackingNumber(e.target.value)}
-                                        placeholder="Enter tracking number"
+                                        placeholder="Enter tracking number (required)"
                                         className="input w-full"
                                     />
+                                    {!trackingNumber.trim() && (
+                                        <p className="text-red-400 text-sm mt-1">Tracking number is required to ship order</p>
+                                    )}
                                 </div>
                                 <div className="flex gap-3">
                                     <Button
                                         onClick={() => updateStatus('shipped', trackingNumber)}
                                         isLoading={isUpdating}
+                                        disabled={!trackingNumber.trim()}
                                     >
                                         <Truck className="w-4 h-4" />
                                         Mark as Shipped

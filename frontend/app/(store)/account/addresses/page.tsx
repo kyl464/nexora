@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { MapPin, Plus, Trash2, Edit, Loader2, Check } from 'lucide-react';
 import { api, Address } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { cn } from '@/lib/utils';
 
 export default function AddressesPage() {
@@ -12,6 +13,8 @@ export default function AddressesPage() {
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [deleteId, setDeleteId] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
     const [formData, setFormData] = useState({
         label: '',
         name: '',
@@ -85,13 +88,21 @@ export default function AddressesPage() {
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this address?')) return;
+    const handleDelete = (id: string) => {
+        setDeleteId(id);
+    };
+
+    const confirmDelete = async () => {
+        if (!deleteId) return;
+        setIsDeleting(true);
         try {
-            await api.deleteAddress(id);
+            await api.deleteAddress(deleteId);
             await fetchAddresses();
+            setDeleteId(null);
         } catch (error) {
             console.error('Failed to delete address:', error);
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -251,6 +262,17 @@ export default function AddressesPage() {
                     ))}
                 </div>
             )}
+
+            {/* Delete Confirmation Modal */}
+            <ConfirmModal
+                isOpen={deleteId !== null}
+                onClose={() => setDeleteId(null)}
+                onConfirm={confirmDelete}
+                title="Delete Address"
+                description="Are you sure you want to delete this address?"
+                confirmText="Delete"
+                isLoading={isDeleting}
+            />
         </div>
     );
 }

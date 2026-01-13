@@ -118,6 +118,11 @@ func main() {
 		api.POST("/guest/order", handlers.CreateGuestOrder)
 		api.POST("/guest/track", handlers.TrackOrder)
 		api.POST("/guest/payment/:order_id", handlers.CreateGuestPayment)
+		api.POST("/guest/payment/:order_id/simulate", handlers.SimulateGuestPayment)
+
+		// Tracking routes (public)
+		api.POST("/tracking", handlers.TrackShipment)
+		api.GET("/couriers", handlers.GetCouriers)
 
 		// Payment routes
 		payments := api.Group("/payments")

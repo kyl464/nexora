@@ -7,8 +7,6 @@ import {
     ShoppingCart,
     Users,
     DollarSign,
-    TrendingUp,
-    TrendingDown,
     ArrowRight,
     AlertTriangle
 } from 'lucide-react';
@@ -156,7 +154,7 @@ export default function AdminDashboardPage() {
                             stats.recentOrders.map((order) => (
                                 <div key={order.id} className="flex items-center justify-between p-3 rounded-xl bg-dark-700/50">
                                     <div>
-                                        <p className="font-medium text-white">#{order.id.slice(0, 8)}</p>
+                                        <p className="font-medium text-white">#{order.order_number || order.id.slice(0, 8)}</p>
                                         <p className="text-sm text-slate-400">{formatDateTime(order.created_at)}</p>
                                     </div>
                                     <div className="text-right">

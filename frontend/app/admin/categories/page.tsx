@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { api, Category } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { cn } from '@/lib/utils';
 
 export default function AdminCategoriesPage() {
@@ -20,6 +21,8 @@ export default function AdminCategoriesPage() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [formData, setFormData] = useState({ name: '', icon: '' });
     const [isSaving, setIsSaving] = useState(false);
+    const [deleteId, setDeleteId] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
         fetchCategories();
@@ -63,15 +66,22 @@ export default function AdminCategoriesPage() {
         setShowForm(true);
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this category?')) return;
+    const handleDelete = (id: string) => {
+        setDeleteId(id);
+    };
 
+    const confirmDelete = async () => {
+        if (!deleteId) return;
+        setIsDeleting(true);
         try {
-            await api.adminDeleteCategory(id);
+            await api.adminDeleteCategory(deleteId);
             await fetchCategories();
+            setDeleteId(null);
         } catch (error) {
             console.error('Failed to delete category:', error);
             alert('Failed to delete category');
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -188,6 +198,17 @@ export default function AdminCategoriesPage() {
                     </div>
                 )}
             </div>
+
+            {/* Delete Confirmation Modal */}
+            <ConfirmModal
+                isOpen={deleteId !== null}
+                onClose={() => setDeleteId(null)}
+                onConfirm={confirmDelete}
+                title="Delete Category"
+                description="Are you sure you want to delete this category? Products in this category may be affected."
+                confirmText="Delete"
+                isLoading={isDeleting}
+            />
         </div>
     );
 }

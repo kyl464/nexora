@@ -483,6 +483,12 @@ func UpdateOrderStatus(c *gin.Context) {
 	newStatus := models.OrderStatus(input.Status)
 	oldStatus := order.Status
 
+	// Validate tracking number is required for shipped status
+	if newStatus == models.OrderStatusShipped && input.TrackingNumber == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tracking number is required for shipped orders"})
+		return
+	}
+
 	// Update tracking number if provided
 	if input.TrackingNumber != "" {
 		order.TrackingNumber = input.TrackingNumber

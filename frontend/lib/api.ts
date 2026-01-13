@@ -321,6 +321,18 @@ class ApiClient {
             method: 'POST',
         });
     }
+
+    // Tracking API
+    async trackShipment(trackingNumber: string, courier: string) {
+        return this.request<TrackingResponse>('/tracking', {
+            method: 'POST',
+            body: JSON.stringify({ tracking_number: trackingNumber, courier }),
+        });
+    }
+
+    async getCouriers() {
+        return this.request<{ couriers: Courier[] }>('/couriers');
+    }
 }
 
 export const api = new ApiClient(API_URL);
@@ -509,4 +521,26 @@ export interface Review {
     rating: number;
     comment: string;
     created_at: string;
+}
+
+export interface Courier {
+    code: string;
+    name: string;
+}
+
+export interface TrackingHistory {
+    date: string;
+    description: string;
+    location?: string;
+}
+
+export interface TrackingResponse {
+    success: boolean;
+    data?: {
+        tracking_number: string;
+        courier: string;
+        status: string;
+        history: TrackingHistory[];
+    };
+    error?: string;
 }

@@ -294,8 +294,8 @@ func PaymentNotification(c *gin.Context) {
 		payment.PaidAt = &now
 		payment.Method = paymentType
 
-		// Update order status to processing (auto-process after payment)
-		config.DB.Model(&models.Order{}).Where("id = ?", payment.OrderID).Update("status", models.OrderStatusProcessing)
+		// Update order status to paid (admin will approve to set processing)
+		config.DB.Model(&models.Order{}).Where("id = ?", payment.OrderID).Update("status", models.OrderStatusPaid)
 
 	case "deny", "cancel":
 		payment.Status = models.PaymentStatusFailed
@@ -370,8 +370,47 @@ func SimulatePayment(c *gin.Context) {
 	payment.PaidAt = &now
 
 	config.DB.Save(&payment)
-	// Set to processing instead of paid (auto-process after payment)
-	config.DB.Model(&models.Order{}).Where("id = ?", parsedOrderID).Update("status", models.OrderStatusProcessing)
+	// Set to paid (admin will approve to set processing)
+	config.DB.Model(&models.Order{}).Where("id = ?", parsedOrderID).Update("status", models.OrderStatusPaid)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Payment simulated successfully"})
+}
+
+// SimulateGuestPayment simulates a successful payment for guest orders (for sandbox testing)
+func SimulateGuestPayment(c *gin.Context) {
+	if config.AppConfig.MidtransIsProduction {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Simulation not available in production"})
+		return
+	}
+
+	orderID := c.Param("order_id")
+	parsedOrderID, err := uuid.Parse(orderID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid order ID"})
+		return
+	}
+
+	// Ensure it's a guest order (no user_id)
+	var order models.Order
+	if err := config.DB.Where("id = ? AND user_id IS NULL", parsedOrderID).First(&order).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Guest order not found"})
+		return
+	}
+
+	var payment models.Payment
+	if err := config.DB.Where("order_id = ?", parsedOrderID).First(&payment).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Payment not found"})
+		return
+	}
+
+	payment.Status = models.PaymentStatusSuccess
+	payment.Method = "simulation"
+	now := time.Now()
+	payment.PaidAt = &now
+
+	config.DB.Save(&payment)
+	// Set to paid (admin will approve to set processing)
+	config.DB.Model(&models.Order{}).Where("id = ?", parsedOrderID).Update("status", models.OrderStatusPaid)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Guest payment simulated successfully", "order_id": order.ID, "order_number": order.OrderNumber})
 }

@@ -10,10 +10,12 @@ import {
     Trash2,
     MoreVertical,
     Package,
-    Loader2
+    Loader2,
+    Star
 } from 'lucide-react';
 import { api, Product } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { formatPrice, cn } from '@/lib/utils';
 
 export default function AdminProductsPage() {
@@ -22,6 +24,8 @@ export default function AdminProductsPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
+    const [deleteId, setDeleteId] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
         fetchProducts();
@@ -44,15 +48,22 @@ export default function AdminProductsPage() {
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this product?')) return;
+    const handleDelete = (id: string) => {
+        setDeleteId(id);
+    };
 
+    const confirmDelete = async () => {
+        if (!deleteId) return;
+        setIsDeleting(true);
         try {
-            await api.adminDeleteProduct(id);
-            fetchProducts(); // Refresh list
+            await api.adminDeleteProduct(deleteId);
+            fetchProducts();
+            setDeleteId(null);
         } catch (error) {
             console.error('Failed to delete product:', error);
             alert('Failed to delete product');
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -129,7 +140,15 @@ export default function AdminProductsPage() {
                                                     )}
                                                 </div>
                                                 <div>
-                                                    <p className="font-medium text-white">{product.name}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="font-medium text-white">{product.name}</p>
+                                                        {product.is_featured && (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-500">
+                                                                <Star className="w-3 h-3 fill-current" />
+                                                                Featured
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <p className="text-sm text-slate-400">{product.slug}</p>
                                                 </div>
                                             </div>
@@ -201,6 +220,17 @@ export default function AdminProductsPage() {
                     </div>
                 )}
             </div>
+
+            {/* Delete Confirmation Modal */}
+            <ConfirmModal
+                isOpen={deleteId !== null}
+                onClose={() => setDeleteId(null)}
+                onConfirm={confirmDelete}
+                title="Delete Product"
+                description="Are you sure you want to delete this product? This action cannot be undone."
+                confirmText="Delete"
+                isLoading={isDeleting}
+            />
         </div>
     );
 }

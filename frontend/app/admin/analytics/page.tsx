@@ -9,9 +9,22 @@ import {
     ShoppingCart,
     ArrowUp,
     ArrowDown,
-    Loader2
+    Loader2,
+    BarChart3,
+    Award,
 } from 'lucide-react';
-import { api } from '@/lib/api';
+import {
+    AreaChart,
+    Area,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    ResponsiveContainer,
+    BarChart,
+    Bar,
+} from 'recharts';
+import { api, Order } from '@/lib/api';
 import { formatPrice, cn } from '@/lib/utils';
 
 interface AnalyticsData {
@@ -21,11 +34,14 @@ interface AnalyticsData {
     totalUsers: number;
     revenueChange: number;
     ordersChange: number;
+    salesData: { date: string; revenue: number; orders: number }[];
+    topProducts: { name: string; sold: number; revenue: number; image?: string }[];
 }
 
 export default function AdminAnalyticsPage() {
     const [data, setData] = useState<AnalyticsData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [chartView, setChartView] = useState<'revenue' | 'orders'>('revenue');
 
     useEffect(() => {
         const fetchData = async () => {
@@ -38,14 +54,62 @@ export default function AdminAnalyticsPage() {
                 ]);
 
                 // Calculate totals - count paid/processing/shipped/delivered orders for revenue
-                const successfulOrders = orders.orders?.filter(o =>
+                const paidOrders = orders.orders?.filter(o =>
                     ['paid', 'processing', 'shipped', 'delivered'].includes(o.status)
                 ) || [];
-                const totalRevenue = successfulOrders.reduce((sum, o) => sum + o.total, 0);
+                const totalRevenue = paidOrders.reduce((sum, o) => sum + o.total, 0);
 
                 // Calculate change percentages (mock for now - would need historical data)
-                const revenueChange = successfulOrders.length > 0 ? 12.5 : 0;
+                const revenueChange = paidOrders.length > 0 ? 12.5 : 0;
                 const ordersChange = orders.total > 0 ? 8.2 : 0;
+
+                // Generate sales data from orders (last 7 days)
+                const salesByDate: Record<string, { revenue: number; orders: number }> = {};
+                const last7Days = Array.from({ length: 7 }, (_, i) => {
+                    const date = new Date();
+                    date.setDate(date.getDate() - (6 - i));
+                    return date.toISOString().split('T')[0];
+                });
+
+                last7Days.forEach(date => {
+                    salesByDate[date] = { revenue: 0, orders: 0 };
+                });
+
+                paidOrders.forEach(order => {
+                    const orderDate = order.created_at.split('T')[0];
+                    if (salesByDate[orderDate]) {
+                        salesByDate[orderDate].revenue += order.total;
+                        salesByDate[orderDate].orders += 1;
+                    }
+                });
+
+                const salesData = Object.entries(salesByDate).map(([date, salesInfo]) => ({
+                    date: new Date(date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }),
+                    revenue: salesInfo.revenue,
+                    orders: salesInfo.orders,
+                }));
+
+                // Calculate top products from order items
+                const productSales: Record<string, { name: string; sold: number; revenue: number; image?: string }> = {};
+                paidOrders.forEach(order => {
+                    order.items?.forEach(item => {
+                        const productId = item.product_id;
+                        if (!productSales[productId]) {
+                            productSales[productId] = {
+                                name: item.product_name,
+                                sold: 0,
+                                revenue: 0,
+                                image: item.product?.images?.[0]?.url,
+                            };
+                        }
+                        productSales[productId].sold += item.quantity;
+                        productSales[productId].revenue += item.subtotal;
+                    });
+                });
+
+                const topProducts = Object.values(productSales)
+                    .sort((a, b) => b.sold - a.sold)
+                    .slice(0, 5);
 
                 setData({
                     totalRevenue,
@@ -54,6 +118,8 @@ export default function AdminAnalyticsPage() {
                     totalUsers: users?.length || 0,
                     revenueChange,
                     ordersChange,
+                    salesData,
+                    topProducts,
                 });
             } catch (error) {
                 console.error('Failed to fetch analytics:', error);
@@ -140,60 +206,117 @@ export default function AdminAnalyticsPage() {
                 ))}
             </div>
 
-            {/* Charts Section */}
-            <div className="grid lg:grid-cols-2 gap-6">
-                {/* Revenue Chart */}
-                <div className="card p-6">
-                    <h3 className="font-semibold text-white mb-4 flex items-center gap-2">
-                        <TrendingUp className="w-5 h-5 text-primary" />
-                        Revenue Overview
-                    </h3>
-                    <div className="h-64 flex items-center justify-center border border-dashed border-dark-600 rounded-xl">
-                        <div className="text-center">
-                            <TrendingUp className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-                            <p className="text-slate-500">Chart visualization coming soon</p>
-                            <p className="text-xs text-slate-600 mt-1">Integrate with charting library like Recharts</p>
-                        </div>
+            {/* Sales Chart */}
+            <div className="card p-6">
+                <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-2">
+                        <BarChart3 className="w-5 h-5 text-primary" />
+                        <h2 className="font-semibold text-white text-lg">Sales Overview (Last 7 Days)</h2>
+                    </div>
+                    <div className="flex bg-dark-700 rounded-lg p-1">
+                        <button
+                            onClick={() => setChartView('revenue')}
+                            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${chartView === 'revenue'
+                                ? 'bg-primary text-white'
+                                : 'text-slate-400 hover:text-white'
+                                }`}
+                        >
+                            Revenue
+                        </button>
+                        <button
+                            onClick={() => setChartView('orders')}
+                            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${chartView === 'orders'
+                                ? 'bg-primary text-white'
+                                : 'text-slate-400 hover:text-white'
+                                }`}
+                        >
+                            Orders
+                        </button>
                     </div>
                 </div>
-
-                {/* Orders Chart */}
-                <div className="card p-6">
-                    <h3 className="font-semibold text-white mb-4 flex items-center gap-2">
-                        <ShoppingCart className="w-5 h-5 text-primary" />
-                        Orders Overview
-                    </h3>
-                    <div className="h-64 flex items-center justify-center border border-dashed border-dark-600 rounded-xl">
-                        <div className="text-center">
-                            <ShoppingCart className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-                            <p className="text-slate-500">Chart visualization coming soon</p>
-                            <p className="text-xs text-slate-600 mt-1">Integrate with charting library like Recharts</p>
-                        </div>
-                    </div>
+                <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                        {chartView === 'revenue' ? (
+                            <AreaChart data={data?.salesData || []}>
+                                <defs>
+                                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                                <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} />
+                                <YAxis stroke="#94a3b8" fontSize={12} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`} />
+                                <Tooltip
+                                    contentStyle={{
+                                        backgroundColor: '#1e293b',
+                                        border: '1px solid #334155',
+                                        borderRadius: '8px',
+                                    }}
+                                    labelStyle={{ color: '#f1f5f9' }}
+                                    formatter={(value) => value !== undefined ? [formatPrice(value as number), 'Revenue'] : ['', 'Revenue']}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey="revenue"
+                                    stroke="#6366f1"
+                                    strokeWidth={2}
+                                    fillOpacity={1}
+                                    fill="url(#colorRevenue)"
+                                />
+                            </AreaChart>
+                        ) : (
+                            <BarChart data={data?.salesData || []}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                                <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} />
+                                <YAxis stroke="#94a3b8" fontSize={12} />
+                                <Tooltip
+                                    contentStyle={{
+                                        backgroundColor: '#1e293b',
+                                        border: '1px solid #334155',
+                                        borderRadius: '8px',
+                                    }}
+                                    labelStyle={{ color: '#f1f5f9' }}
+                                    formatter={(value) => value !== undefined ? [value, 'Orders'] : [0, 'Orders']}
+                                />
+                                <Bar dataKey="orders" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                        )}
+                    </ResponsiveContainer>
                 </div>
             </div>
 
             {/* Top Products */}
             <div className="card p-6">
-                <h3 className="font-semibold text-white mb-4">Top Products</h3>
-                <div className="space-y-4">
-                    {[1, 2, 3, 4, 5].map((i) => (
-                        <div key={i} className="flex items-center gap-4 p-3 rounded-xl bg-dark-700/50">
-                            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-sm">
-                                #{i}
-                            </div>
-                            <div className="flex-1">
-                                <div className="h-4 bg-dark-600 rounded w-1/3 animate-pulse" />
-                            </div>
-                            <div className="text-right">
-                                <div className="h-4 bg-dark-600 rounded w-20 animate-pulse" />
-                            </div>
-                        </div>
-                    ))}
+                <div className="flex items-center gap-2 mb-6">
+                    <Award className="w-5 h-5 text-amber-500" />
+                    <h3 className="font-semibold text-white text-lg">Top Selling Products</h3>
                 </div>
-                <p className="text-center text-slate-500 text-sm mt-4">
-                    Top products data will be available after more sales
-                </p>
+                <div className="space-y-4">
+                    {data?.topProducts && data.topProducts.length > 0 ? (
+                        data.topProducts.map((product, index) => (
+                            <div key={index} className="flex items-center justify-between p-3 rounded-xl bg-dark-700/50">
+                                <div className="flex items-center gap-3">
+                                    <span className="w-8 h-8 rounded-full bg-primary/10 text-primary text-sm font-bold flex items-center justify-center">
+                                        {index + 1}
+                                    </span>
+                                    {product.image && (
+                                        <img src={product.image} alt="" className="w-10 h-10 rounded-lg object-cover" />
+                                    )}
+                                    <div>
+                                        <p className="font-medium text-white">{product.name}</p>
+                                        <p className="text-sm text-slate-400">{product.sold} units sold</p>
+                                    </div>
+                                </div>
+                                <span className="text-emerald-500 font-medium">
+                                    {formatPrice(product.revenue)}
+                                </span>
+                            </div>
+                        ))
+                    ) : (
+                        <p className="text-slate-400 text-center py-8">No sales data yet. Top products will appear after orders are made.</p>
+                    )}
+                </div>
             </div>
         </div>
     );
