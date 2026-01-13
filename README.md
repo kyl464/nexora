@@ -155,7 +155,7 @@ Ensure you have the following installed:
 #### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/nexora.git
+git clone https://github.com/kyl464/nexora.git
 cd nexora
 ```
 
